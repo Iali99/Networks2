@@ -1,54 +1,46 @@
+/************* UDP SERVER CODE *******************/
+
 #include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
 #include <netinet/in.h>
+#include <string.h>
+#include <stdlib.h>
 
 int main(){
+  int udpSocket, nBytes;
+  char buffer[1024];
+  struct sockaddr_in serverAddr, clientAddr;
+  struct sockaddr_storage serverStorage;
+  socklen_t addr_size, client_addr_size;
+  int i;
 
-  int sockid, status, addr_len;
-  char buffer[1000] = {0};
-  char mssg[1000];
-  unsigned short port = 3544;
-  struct sockaddr_in serverAddress, clientAddress;
-  //Creating a Socket
-  sockid = socket(AF_INET, SOCK_DGRAM, 0);
-  if(sockid == -1){
-    printf("Socket Creation Failed\n");
-    return 0;
+  /*Create UDP socket*/
+  udpSocket = socket(PF_INET, SOCK_DGRAM, 0);
+
+  /*Configure settings in address struct*/
+  serverAddr.sin_family = AF_INET;
+  serverAddr.sin_port = htons(7891);
+  serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+  memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
+
+  /*Bind socket with address struct*/
+  bind(udpSocket, (struct sockaddr *) &serverAddr, sizeof(serverAddr));
+
+  /*Initialize size variable to be used later on*/
+  addr_size = sizeof serverStorage;
+
+  while(1){
+    /* Try to receive any incoming UDP datagram. Address and port of
+      requesting client will be stored on serverStorage variable */
+    nBytes = recvfrom(udpSocket,buffer,1024,0,(struct sockaddr *)&serverStorage, &addr_size);
+
+    /*Convert message received to uppercase*/
+    for(i=0;i<nBytes-1;i++)
+      buffer[i] = toupper(buffer[i]);
+
+    /*Send uppercase message back to client, using serverStorage as the address*/
+    sendto(udpSocket,buffer,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
   }
 
-  //Setup the Address
-  serverAddress.sin_family = AF_INET;
-  serverAddress.sin_port = htons(port);
-  serverAddress.sin_addr.s_addr = INADDR_ANY;
-  addr_len = sizeof(serverAddress);
-  //Binding the Socket to an Address
-  status = bind(sockid,(struct sockaddr *)&serverAddress, addr_len );
-  if(status == -1) {
-    printf("Failed to bind the socket\n" );
-    return 0;
-  }
-  printf("Server Started\n" );
-  int count;
-  socklen_t len;
-  while(1) {
-    count = recvfrom(sockid,(char *)buffer, 1000, 0, (struct sockaddr *)&clientAddress, (socklen_t *)&len);
-    buffer[count] = '\0';
-
-    printf("Client : " );
-    puts(buffer);
-
-    printf("Send your message : ");
-    gets(mssg);
-    printf("Sending message\n" );
-    count = sendto(sockid, (const char *)mssg, 1000, 0, (const struct sockaddr *)&clientAddress, sizeof(clientAddress));
-    printf("message sent\n" );
-  }
   return 0;
-  //Closing a Socket
-
 }

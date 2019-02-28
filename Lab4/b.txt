@@ -1,0 +1,66 @@
+/************* UDP CLIENT CODE *******************/
+
+#include <stdio.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <fstream>
+#include <iostream>
+
+using namespace std;
+
+//Header Structure
+struct Header {
+    int sequenceNo;
+    int Ack;
+    int AckNo;
+    int checksum;
+};
+
+struct Packet {
+  struct Header header;
+  char data[1024];
+};
+
+int main(){
+  int clientSocket, portNum, nBytes;
+  char buffer[1024];
+  struct sockaddr_in serverAddr;
+  socklen_t addr_size;
+  ifstream input ("test.txt", std::ifstream::binary);
+  /*Create UDP socket*/
+  clientSocket = socket(PF_INET, SOCK_DGRAM, 0);
+
+  /*Configure settings in address struct*/
+  serverAddr.sin_family = AF_INET;
+  serverAddr.sin_port = htons(7891);
+  serverAddr.sin_addr.s_addr = INADDR_ANY;
+  memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
+
+  /*Initialize size variable to be used later on*/
+  addr_size = sizeof serverAddr;
+
+  while(input.eofbit){
+    //printf("Type a sentence to send to server:\n");
+    //fgets(buffer,1024,stdin);
+    //printf("You typed: %s",buffer);
+    input.read(buffer,1024);
+    nBytes = strlen(buffer) + 17;
+    Packet p;
+    p.header.sequenceNo = 1;
+    p.header.Ack = 1;
+    p.header.AckNo = 1;
+    p.header.checksum = 1;
+    strcpy(p.data,buffer);
+    /*Send message to server*/
+    sendto(clientSocket,(Packet *)&p,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+
+    /*Receive message from server*/
+    nBytes = recvfrom(clientSocket,buffer,1024,0,NULL, NULL);
+
+    printf("Received from server: %s\n",buffer);
+
+  }
+  input.close();
+  return 0;
+}

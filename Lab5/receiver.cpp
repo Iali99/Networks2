@@ -5,35 +5,44 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <stdlib.h>
+#include <vector>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 
 using namespace std;
 
 #define LEN 500
+#define WIN_SIZE 10
 //Header Structure
-struct Header {
+struct DataPack {
+    int type;
     int sequenceNo;
-    int Ack;
-    int AckNo;
     int checksum;
+    int payloadLength;
+    char payload[LEN];
 };
 
-struct Packet {
-  struct Header header;
-  char data[LEN];
+struct Ack {
+  int type;
+  int recvSequenceNumber;
+  int checksum;
 };
 
 int getChecksum(char * a);
 
+vector<int> receivedPackets;
+vector<DataPack> receivedBuffer;
+
 int main(){
-  int udpSocket, nBytes;
+  int udpSocket, nBytes, rcvBase;
+  rcvBase = 0;
   char buffer[LEN];
   struct sockaddr_in serverAddr, clientAddr;
   struct sockaddr_storage serverStorage;
   socklen_t addr_size, client_addr_size;
   int i;
-  Packet sent,received;
+
   ofstream file;
   /*Create UDP socket*/
   udpSocket = socket(PF_INET, SOCK_DGRAM, 0);
@@ -62,44 +71,44 @@ int main(){
   file.open(filename,ios::binary | ios::out);
   bool flag = false;
   int expectedSeqNo = 1;
+  Ack toSend;
+  DataPack received;
   while(1){
-    /* Try to receive any incoming UDP datagram. Address and port of
-      requesting client will be stored on serverStorage variable */
-    nBytes = recvfrom(udpSocket,(Packet *)&received,LEN + 16,0,(struct sockaddr *)&serverStorage, &addr_size);
-
-    //cout << "DATA : ";
-
-    // fwrite(received.data,1,sizeof(received.data),file);
-  //  cout << endl;
-    if(expectedSeqNo == received.header.sequenceNo && getChecksum(received.data) != received.header.checksum) {
-      sent.header.Ack = 0;
-      sent.header.AckNo = received.header.sequenceNo;
-      strcpy(sent.data,"Data Corrupted. Please Send the packet again");
+    printf("asdfh\n" );
+    nBytes = recvfrom(udpSocket,(DataPack *)&received,LEN + 16,0,(struct sockaddr *)&serverStorage, &addr_size);
+    printf("received\n" );
+    int seqNo = received.sequenceNo;
+    if(seqNo >= rcvBase && seqNo < rcvBase + WIN_SIZE) {
+      toSend.type = 2;
+      toSend.recvSequenceNumber = seqNo;
+      toSend.checksum = getChecksum(received.payload);
+      sendto(udpSocket,(Ack *)&toSend,12,0,(struct sockaddr *)&serverStorage,addr_size);
+      receivedPackets.push_back(seqNo);
+      receivedBuffer.push_back(received);
+      printf("New Packet Recieved\n");
+      if(seqNo == rcvBase) {
+        do {
+          for(int i = 0;i< receivedBuffer.size();i++){
+            if(receivedPackets[i] == rcvBase){
+              cout << receivedBuffer[i].payload;
+              receivedPackets.erase(receivedPackets.begin()+i);
+              receivedBuffer.erase(receivedBuffer.begin()+i);
+            }
+          }
+          rcvBase++;
+        }while(count(receivedPackets.begin(),receivedPackets.end(),rcvBase));
+      }
+    }
+    else if(seqNo < rcvBase && seqNo >= rcvBase - WIN_SIZE){
+      printf("Duplicate Packet Received\n" );
+      toSend.type = 2;
+      toSend.recvSequenceNumber = seqNo;
+      toSend.checksum = getChecksum(received.payload);
+      sendto(udpSocket,(Ack *)&toSend,12,0,(struct sockaddr *)&serverStorage,addr_size);
     }
     else {
-      if(expectedSeqNo == received.header.sequenceNo){
-
-        for(i=0;i<strlen(received.data);i++){
-          //printf("len = %d\n",strlen(received.data) );
-          file << received.data[i] << std::flush;
-        }
-        if(nBytes < LEN)
-          flag = true;
-        expectedSeqNo += 1;
-        printf("Received Packet with sequence no : %d  \n",received.header.sequenceNo);
-      }
-      else{
-        printf("Duplicate Packet received with sequence no : %d\n",received.header.sequenceNo );
-      }
-      sent.header.Ack = 1;
-      sent.header.AckNo = received.header.sequenceNo + 1;
-      strcpy(sent.data,"Data Received");
+      printf("in else\n" );
     }
-    nBytes = strlen(buffer) + 17;
-    /*Send uppercase message back to client, using serverStorage as the address*/
-    sendto(udpSocket,(Packet *)&sent,nBytes,0,(struct sockaddr *)&serverStorage,addr_size);
-    if(flag)
-      break;
   }
   // file.close();
   printf("File Successfully Received\n" );

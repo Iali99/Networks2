@@ -12,11 +12,12 @@
 
 using namespace std;
 
-#define LEN 500
-#define WIN_SIZE 10
+#define LEN 100
+#define WIN_SIZE 4
 //Header Structure
 struct DataPack {
     int type;
+    int isLast;
     int sequenceNo;
     int checksum;
     int payloadLength;
@@ -74,9 +75,7 @@ int main(){
   Ack toSend;
   DataPack received;
   while(1){
-    printf("asdfh\n" );
     nBytes = recvfrom(udpSocket,(DataPack *)&received,LEN + 16,0,(struct sockaddr *)&serverStorage, &addr_size);
-    printf("received\n" );
     int seqNo = received.sequenceNo;
     if(seqNo >= rcvBase && seqNo < rcvBase + WIN_SIZE) {
       toSend.type = 2;
@@ -90,7 +89,9 @@ int main(){
         do {
           for(int i = 0;i< receivedBuffer.size();i++){
             if(receivedPackets[i] == rcvBase){
-              cout << receivedBuffer[i].payload;
+              file  << receivedBuffer[i].payload << std::flush;
+              if(receivedBuffer[i].isLast == 1)
+                return 0;
               receivedPackets.erase(receivedPackets.begin()+i);
               receivedBuffer.erase(receivedBuffer.begin()+i);
             }

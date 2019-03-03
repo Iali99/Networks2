@@ -13,11 +13,13 @@
 
 using namespace std;
 
-#define LEN 500
-#define WIN_SIZE 2
+#define LEN 100
+#define WIN_SIZE 4
+#define TIME_OUT 20000
 //Header Structure
 struct DataPack {
     int type;
+    int isLast;
     int sequenceNo;
     int checksum;
     int payloadLength;
@@ -36,24 +38,27 @@ void* receiverThread(void * args);
 // Sender Thread Funtion
 void* senderThread(void * args);
 
+void * timeoutCheckerThread(void * args);
+
 int getChecksum(char * a);
 
 /* ---- Global Variables ---- */
 
+int c;
 vector<int> receivedPackets;
 int base, nextSeqNumber, clientSocket;
 int totalPackets;
 struct sockaddr_in serverAddr;
 socklen_t addr_size;
 vector<DataPack> packets;
-
+vector<std::chrono::system_clock::time_point> packetSendTimes;
 
 /* -- Main Program -- */
 
 int main(){
-  int clientSocket, portNum, nBytes;
+  int  portNum, nBytes;
   char buffer[LEN];
-
+  c = 0;
 
   char filename[1024];
   printf("Enter the filename to be transferred : " );
@@ -64,6 +69,7 @@ int main(){
   DataPack tempPacket;
   totalPackets = 0;
   while(!input.eof()) {
+    memset(buffer,0,LEN);
     input.read(buffer,LEN);
     strcpy(tempPacket.payload, buffer);
     tempPacket.payloadLength = strlen(buffer);
@@ -71,16 +77,21 @@ int main(){
     totalPackets++;
     tempPacket.type = 1; // 1 for DataPack
     tempPacket.checksum = getChecksum(buffer);
-    memset(buffer,0,LEN);
+    // cout << buffer << "\n ------------------------------\n";
+
     packets.push_back(tempPacket);
   }
+  packets[totalPackets - 1].isLast = 1;
+  cout << endl;
   printf("totalPackets = %d\n",totalPackets );
   base = 0;
   nextSeqNumber = 0;
 //  int totalPackets = (filesize+LEN-1)/LEN;
 
-  for(int i = 0;i<totalPackets;i++)
+  for(int i = 0;i<totalPackets;i++){
     receivedPackets.push_back(0);
+    packetSendTimes.push_back(std::chrono::system_clock::now());
+  }
   /*Create UDP socket*/
   clientSocket = socket(PF_INET, SOCK_DGRAM, 0);
 
@@ -98,44 +109,71 @@ int main(){
 
   std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-  pthread_t senderT,receiverT;
+  pthread_t senderT,receiverT,timeoutT;
   pthread_create(&senderT,NULL,senderThread,(void *)1);
   pthread_create(&receiverT,NULL,receiverThread,(void *)2);
-
+  pthread_create(&timeoutT,NULL,timeoutCheckerThread,(void *)3);
   pthread_join(senderT,NULL);
   pthread_join(receiverT,NULL);
-
+  pthread_join(timeoutT,NULL);
   input.close();
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	std::cout << "Time taken to transfer the file = " << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << std::endl;
+	std::cout << "Time taken to transfer the file = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
 
   close(clientSocket);
   return 0;
 }
 
+void * timeoutCheckerThread(void * args) {
+  std::chrono::microseconds timeout (TIME_OUT);
+  while(1) {
+    if(nextSeqNumber == totalPackets)
+      break;
+    for(int i = base;i<base+WIN_SIZE;i++){
+      if(i< totalPackets && receivedPackets[i] != 1 ) {
+        auto now = std::chrono::system_clock::now();
+        std::chrono::microseconds duration = std::chrono::duration_cast<chrono::microseconds>(now-packetSendTimes[i]);
+        if(duration.count() > timeout.count()){
+          printf("Resending packet %d\n", i);
+          sendto(clientSocket, (DataPack *)&(packets[i]),strlen(packets[i].payload)+16,0,(struct sockaddr *)&serverAddr,addr_size);
+        }
+      }
+    }
+  }
+}
+
 void * senderThread(void * args) {
+
   while(1) {
     if(nextSeqNumber == totalPackets)
       break;
     if(nextSeqNumber < base + WIN_SIZE) {
       printf("sending packet with seq no %d\n",nextSeqNumber );
-      sendto(clientSocket, (DataPack *)&(packets[nextSeqNumber]),strlen(packets[nextSeqNumber].payload)+16,0,(struct sockaddr *)&serverAddr,addr_size);
+      if(sendto(clientSocket, (DataPack *)&(packets[nextSeqNumber]),strlen(packets[nextSeqNumber].payload)+16,0,(struct sockaddr *)&serverAddr,addr_size) == -1){
+        printf("Error sending\n");
+      }
+      else {
+        packetSendTimes[nextSeqNumber] = std::chrono::system_clock::now();
+        nextSeqNumber++;
+      }
       // printf("seq no ++\n");
-      nextSeqNumber++;
+
     }
   }
-  printf("Out of while loop\n" );
 }
 
 void * receiverThread(void * args) {
   Ack recvPacket;
   while(1) {
+    if(nextSeqNumber == totalPackets)
+      break;
     int nBytes = recvfrom(clientSocket,(Ack *)&recvPacket,12,0,NULL,NULL);
-    receivedPackets[recvPacket.recvSequenceNumber] = 1;
-    printf("received ack for %d packet\n",recvPacket.recvSequenceNumber );
+    if(nBytes != -1)
+    {receivedPackets[recvPacket.recvSequenceNumber] = 1;
+    printf("received ack for %d packet %d\n",recvPacket.recvSequenceNumber,c++ );
     while(receivedPackets[base]){
       base++;
-    }
+    }}
   }
 }
 

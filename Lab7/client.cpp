@@ -37,29 +37,32 @@ void *threadFunction(void *args);
 
 int main(int argc , char *argv[])
 {
-    // auto begin = std::chrono::steady_clock::now();
-    // subpartB();
-    // auto end = std::chrono::steady_clock::now();
+    auto begin = std::chrono::steady_clock::now();
+    subpartB();
+    auto end = std::chrono::steady_clock::now();
     // std::cout << "Subpart B : Time taken to download the files = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
     // begin = std::chrono::steady_clock::now();
     // subpartC();
     // end = std::chrono::steady_clock::now();
-    // std::cout << "Subpart C : Time taken to download the files = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
+    // // std::cout << "Subpart C : Time taken to download the files = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
     // begin = std::chrono::steady_clock::now();
-    subpartD();
+    // subpartD();
     // end = std::chrono::steady_clock::now();
     // std::cout << "Subpart D : Time taken to download the files = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << std::endl;
     return 0;
 }
 
 void subpartB() {
-    std::ifstream input_file("links6.txt");
+  char inp[1000];
+    gets(inp);
+    std::ifstream input_file(inp);
     std::string str;
     string host;
+    // printf("host is %s\n",host.c_str() );
     getline(input_file, host);
-    server.sin_addr.s_addr = inet_addr("164.100.117.46");
+    server.sin_addr.s_addr = INADDR_ANY;
     server.sin_family = AF_INET;
-    server.sin_port = htons( 80 );
+    server.sin_port = htons( 1211 );
     while (std::getline(input_file, str))
     {
         string message = "GET ";
@@ -116,6 +119,7 @@ void subpartB() {
         int c  = 0;
         while(received_bytes < file_len)
         {
+            // printf("receiving......\n" );
             int received_len = recv(socket_desc, server_reply , sizeof server_reply , 0);
 
             if( received_len < 0 ){
@@ -134,6 +138,8 @@ void subpartB() {
 
             }
             while(start < received_len){
+              // printf("putting into %s\n",filename.c_str() );
+              // cout << server_reply[start];
               fputc(server_reply[start],file);
               start ++;
             }
@@ -143,8 +149,9 @@ void subpartB() {
 
         fclose(file);
 
-        close(socket_desc);
+        // close(socket_desc);
     }
+    while(1){}
 }
 
 void subpartC() {

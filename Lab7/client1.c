@@ -30,8 +30,9 @@ int main(){
   int count;
   while(1) {
     printf("Enter the message to be sent : ");
-    gets(mssg);
-
+    //gets(mssg);
+    strcpy(mssg,"GET /images/digital_india.jpg HTTP/1.1\r\nHost: commerce.gov.in\r\n\r\n");
+    puts(mssg);
     count = send(sockid, mssg, sizeof(mssg), 0);
     if(count == -1) {
       printf("Failed to send the message\n");

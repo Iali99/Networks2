@@ -62,7 +62,7 @@ void subpartB() {
     getline(input_file, host);
     server.sin_addr.s_addr = INADDR_ANY;
     server.sin_family = AF_INET;
-    server.sin_port = htons( 1211 );
+    server.sin_port = htons( 4034 );
     while (std::getline(input_file, str))
     {
         string message = "GET ";
@@ -93,6 +93,7 @@ void subpartB() {
         //Connect to remote server
         if (connect(socket_desc , (struct sockaddr *)&server , sizeof(server)) < 0)
         {
+            printf("%d\n",errno );
             puts("connect error");
             return;
         }
